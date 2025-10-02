@@ -45,7 +45,7 @@ def _(real_estate_data):
 
 @app.cell
 def _(pl, real_estate_data):
-    # Coerce likely numeric columns
+    # Make sure the numeric columns are in the expected format Float64
     numeric_cols = [
         "bathrooms","bedrooms","floorAreaSqM","livingRooms",
         "latitude","longitude",
@@ -58,7 +58,7 @@ def _(pl, real_estate_data):
         if c in real_estate_data.columns:
             real_estate_data_1 = real_estate_data.with_columns(pl.col(c).cast(pl.Float64, strict=False))
 
-    # Coerce date-like columns
+    # # Make sure the date columns are in the expected format
     date_cols = [
         "saleEstimate_valueChange.saleDate",
         "saleEstimate_ingestedAt",
@@ -87,11 +87,50 @@ def _(pl, real_estate_data):
     nulls = real_estate_data_1.select([pl.col(c).is_null().sum().alias(c) for c in real_estate_data_1.columns])
 
     real_estate_data_1.head(), schema, nulls
+    return (real_estate_data_1,)
+
+
+@app.cell
+def _(pl, real_estate_data_1):
+    # Basic cleaning and target definition
+    TARGET = "rentEstimate_currentPrice"
+    real_estate_data_2 = real_estate_data_1
+
+    # Drop duplicates based upon address key
+    subset_key = [c for c in ["fullAddress","postcode"] if c in real_estate_data_1.columns]
+    if subset_key:
+        real_estate_data_2 = real_estate_data_2.unique(subset=subset_key, keep="first")
+
+    # Remove rows without target
+    if TARGET in real_estate_data_2.columns:
+        real_estate_data_2 = real_estate_data_2.filter(pl.col(TARGET).is_not_null())
+
+    # Cap target outliers (e.g., 1st and 99th percentile)
+    q = real_estate_data_2.select([
+        pl.col(TARGET).quantile(0.01).alias("q01"),
+        pl.col(TARGET).quantile(0.99).alias("q99")
+    ]).row(0)
+    q01, q99 = q[0], q[1]
+    real_estate_data_2 = real_estate_data_2.with_columns(
+        pl.when(pl.col(TARGET) < q01).then(q01)
+         .when(pl.col(TARGET) > q99).then(q99)
+         .otherwise(pl.col(TARGET))
+         .alias(TARGET)
+    )
+
+    # Treat floorAreaSqM == 0 as null (if any)
+    if "floorAreaSqM" in real_estate_data_2.columns:
+        real_estate_data_2 = real_estate_data_2.with_columns(
+            pl.when(pl.col("floorAreaSqM") <= 0).then(None).otherwise(pl.col("floorAreaSqM")).alias("floorAreaSqM")
+        )
+
+    real_estate_data_2.shape, real_estate_data_2.head()
     return
 
 
 @app.cell
 def _():
+    # Feature engineering
     return
 
 
