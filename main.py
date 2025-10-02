@@ -8,9 +8,10 @@ app = marimo.App(width="medium")
 def _():
     import marimo as mo
     import polars as pl
+    import pandas as pd
     import numpy as np
     from datetime import datetime, date
-    return date, pl
+    return date, pd, pl
 
 
 @app.cell
@@ -27,7 +28,7 @@ def _():
 
     from lightgbm import LGBMRegressor
     from xgboost import XGBRegressor
-    return
+    return (GroupShuffleSplit,)
 
 
 @app.cell
@@ -125,7 +126,7 @@ def _(pl, real_estate_data_1):
         )
 
     real_estate_data_2.shape, real_estate_data_2.head()
-    return (real_estate_data_2,)
+    return TARGET, real_estate_data_2
 
 
 @app.cell
@@ -178,6 +179,54 @@ def _(date, pl, real_estate_data_2):
     }
 
     real_estate_data_3.head(3), len(postcode_lookup), list(real_estate_data_3.columns)
+    return (real_estate_data_3,)
+
+
+@app.cell
+def _(GroupShuffleSplit, TARGET, pd, pl, real_estate_data_3):
+    # Select features and split into train/valid/test with group-aware 
+    # Select my numerical features and categorical features to use
+    numeric_features = [
+            "bathrooms","bedrooms","floorAreaSqM","livingRooms",
+            "latitude","longitude",
+            "months_since_last_sale","sale_to_hist_ratio"
+    ]
+    categorical_features = [
+        "tenure","propertyType","currentEnergyRating","outcode","outcode_prefix","saleEstimate_confidenceLevel"
+    ]
+
+    # Filter to existing columns
+    numeric_features = [c for c in numeric_features if c in real_estate_data_3.columns]
+    categorical_features = [c for c in categorical_features if c in real_estate_data_3.columns]
+
+    feature_cols = numeric_features + categorical_features + [TARGET]
+    data = real_estate_data_3.select([c for c in feature_cols if c in real_estate_data_3.columns])
+
+    # Drop rows with missing target (already mostly handled)
+    data = data.filter(pl.col(TARGET).is_not_null())
+
+    # Convert to pandas for scikit-learn (Can't split data by indices in polars easily) .take depreciated
+    pdf = data.to_pandas()
+
+    # Groups = outcode to avoid leakage
+    groups = pdf["outcode"] if "outcode" in pdf.columns else pd.Series(["ALL"] * len(pdf))
+
+    # First, train vs temp split
+    gss = GroupShuffleSplit(n_splits=1, train_size=0.8, random_state=42)
+    train_idx, temp_idx = next(gss.split(pdf, groups=groups))
+
+    train_df = pdf.iloc[train_idx].reset_index(drop=True)
+    temp_df = pdf.iloc[temp_idx].reset_index(drop=True)
+
+    # Then, temp -> valid/test split (50/50 of temp)
+    groups_temp = temp_df["outcode"] if "outcode" in temp_df.columns else pd.Series(["ALL"] * len(temp_df))
+    gss2 = GroupShuffleSplit(n_splits=1, train_size=0.5, random_state=42)
+    valid_idx, test_idx = next(gss2.split(temp_df, groups=groups_temp))
+
+    valid_df = temp_df.iloc[valid_idx].reset_index(drop=True)
+    test_df = temp_df.iloc[test_idx].reset_index(drop=True)
+
+    train_df.shape, valid_df.shape, test_df.shape, numeric_features, categorical_features
     return
 
 

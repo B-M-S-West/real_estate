@@ -8,7 +8,9 @@ dependencies = [
     "lightgbm>=4.6.0",
     "marimo>=0.16.4",
     "numpy>=2.0.2",
+    "pandas>=2.3.3",
     "polars>=1.33.1",
+    "pyarrow>=21.0.0",
     "scikit-learn>=1.6.1",
     "xgboost>=2.1.4",
 ]
