@@ -10,7 +10,7 @@ def _():
     import polars as pl
     import numpy as np
     from datetime import datetime, date
-    return (pl,)
+    return date, pl
 
 
 @app.cell
@@ -125,12 +125,64 @@ def _(pl, real_estate_data_1):
         )
 
     real_estate_data_2.shape, real_estate_data_2.head()
+    return (real_estate_data_2,)
+
+
+@app.cell
+def _(date, pl, real_estate_data_2):
+    # Feature engineering
+    today =date.today()
+
+    real_estate_data_3 = real_estate_data_2
+
+    # months_since_last_sale from saleEstimate_valueChange.saleDate
+    if "saleEstimate_valueChange.saleDate" in real_estate_data_3.columns:
+        real_estate_data_3 = real_estate_data_3.with_columns(
+            (
+                (pl.lit(today) - pl.col("saleEstimate_valueChange.saleDate")).dt.total_days() / 30.4375
+            ).alias("months_since_last_sale")
+        )
+    else:
+        real_estate_data_3 = real_estate_data_3.with_columns(pl.lit(None).alias("months_since_last_sale"))
+
+    # Appreciation ratio: saleEstimate_currentPrice / history_price (if both exist)
+    if ("saleEstimate_currentPrice" in real_estate_data_3.columns) and ("history_price" in real_estate_data_3.columns):
+        real_estate_data_3 = real_estate_data_3.with_columns(
+            (pl.col("saleEstimate_currentPrice") / pl.col("history_price")).alias("sale_to_hist_ratio")
+        )
+    else:
+        real_estate_data_3 = real_estate_data_3.with_columns(pl.lit(None).alias("sale_to_hist_ratio"))
+
+    # Clean energy rating to uppercase single-letter buckets (keep None)
+    if "currentEnergyRating" in real_estate_data_3.columns:
+        real_estate_data_3 = real_estate_data_3.with_columns(
+            pl.col("currentEnergyRating").str.to_uppercase().alias("currentEnergyRating")
+        )
+
+    # Build postcode lookup: median lat/long per postcode
+    lookup_df = real_estate_data_3.filter(
+        pl.col("postcode").is_not_null() & pl.col("latitude").is_not_null() & pl.col("longitude").is_not_null()
+    ).group_by("postcode").agg([
+        pl.median("latitude").alias("postcode_lat"),
+        pl.median("longitude").alias("postcode_lng"),
+        pl.first("outcode").alias("postcode_outcode"),
+    ])
+
+    postcode_lookup = {
+        r["postcode"]: {
+            "lat": r["postcode_lat"],
+            "lng": r["postcode_lng"],
+            "outcode": r["postcode_outcode"],
+        }
+        for r in lookup_df.iter_rows(named=True)
+    }
+
+    real_estate_data_3.head(3), len(postcode_lookup), list(real_estate_data_3.columns)
     return
 
 
 @app.cell
 def _():
-    # Feature engineering
     return
 
 
