@@ -11,7 +11,7 @@ def _():
     import pandas as pd
     import numpy as np
     from datetime import datetime, date
-    return date, pd, pl
+    return date, np, pd, pl
 
 
 @app.cell
@@ -25,10 +25,21 @@ def _():
     from sklearn.compose import TransformedTargetRegressor
     from sklearn.base import BaseEstimator, TransformerMixin
     from sklearn.linear_model import Ridge
+    from sklearn.utils.validation import check_is_fitted
 
     from lightgbm import LGBMRegressor
     from xgboost import XGBRegressor
-    return (GroupShuffleSplit,)
+    return (
+        ColumnTransformer,
+        GroupShuffleSplit,
+        LGBMRegressor,
+        OneHotEncoder,
+        Pipeline,
+        Ridge,
+        SimpleImputer,
+        TransformedTargetRegressor,
+        XGBRegressor,
+    )
 
 
 @app.cell
@@ -227,6 +238,96 @@ def _(GroupShuffleSplit, TARGET, pd, pl, real_estate_data_3):
     test_df = temp_df.iloc[test_idx].reset_index(drop=True)
 
     train_df.shape, valid_df.shape, test_df.shape, numeric_features, categorical_features
+    return categorical_features, numeric_features, test_df, train_df, valid_df
+
+
+@app.cell
+def _(
+    ColumnTransformer,
+    HAS_LGBM,
+    LGBMRegressor,
+    OneHotEncoder,
+    Pipeline,
+    Ridge,
+    SimpleImputer,
+    TransformedTargetRegressor,
+    XGBRegressor,
+    categorical_features,
+    np,
+    numeric_features,
+    test_df,
+    train_df,
+    valid_df,
+):
+    # Build preprocessing + model pipeline
+    # Column transformers
+    numeric_transformer = Pipeline(steps=[
+        ("imputer", SimpleImputer(strategy="median"))
+        # Trees don't need scaling. Add StandardScaler if using linear
+    ])
+
+    categorical_transformer = Pipeline(steps=[
+        ("imputer", SimpleImputer(strategy="most_frequent")),
+        ("ohe", OneHotEncoder(handle_unknown="ignore", sparse_output=True))
+    ])
+
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ("num", numeric_transformer, numeric_features),
+            ("cat", categorical_transformer, categorical_features)
+        ],
+        remainder="drop"
+    )
+
+    # Choose model
+    if 'HAS_LGBM' in globals() and HAS_LGBM:
+        model = LGBMRegressor(
+            n_estimators=1000, 
+            learning_rate=0.05, 
+            max_depth=-1, 
+            num_leaves=31, 
+            subsample=0.9, 
+            colsample_bytree=0.9, 
+            random_state=42
+        )
+    else:
+        try:
+            model = XGBRegressor(
+                n_estimators=800, 
+                learning_rate=0.05, 
+                max_depth=8, 
+                subsample=0.9, 
+                colsample_bytree=0.9, 
+                random_state=42, 
+                tree_method="hist"
+            )
+        except Exception:
+            model = Ridge(alpha=1.0, random_state=42)
+
+    # Pipeline + target transform
+    pipeline = Pipeline(steps=[
+        ("pre", preprocessor), 
+        ("reg", model)
+    ])
+
+    # Log-transform the target
+    regr_1 = TransformedTargetRegressor(
+        regressor=pipeline, 
+        func=np.log1p, 
+        inverse_func=np.expm1,
+        check_inverse=False
+    )
+
+    # Split X/y
+    _TARGET = "rentEstimate_currentPrice"
+    X_train_1 = train_df.drop(columns=[_TARGET])
+    y_train_1 = train_df[_TARGET].values
+    X_valid_1 = valid_df.drop(columns=[_TARGET])
+    y_valid_1 = valid_df[_TARGET].values
+    X_test_1  = test_df.drop(columns=[_TARGET])
+    y_test_1  = test_df[_TARGET].values
+
+    regr_1, X_train_1, y_train_1, X_valid_1, y_valid_1, X_test_1, y_test_1
     return
 
 
