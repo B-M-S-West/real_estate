@@ -35,10 +35,14 @@ def _():
         LGBMRegressor,
         OneHotEncoder,
         Pipeline,
+        RandomizedSearchCV,
         Ridge,
         SimpleImputer,
         TransformedTargetRegressor,
         XGBRegressor,
+        mean_absolute_error,
+        mean_squared_error,
+        r2_score,
     )
 
 
@@ -311,7 +315,7 @@ def _(
     ])
 
     # Log-transform the target
-    regr_1 = TransformedTargetRegressor(
+    regr = TransformedTargetRegressor(
         regressor=pipeline, 
         func=np.log1p, 
         inverse_func=np.expm1,
@@ -320,14 +324,79 @@ def _(
 
     # Split X/y
     _TARGET = "rentEstimate_currentPrice"
-    X_train_1 = train_df.drop(columns=[_TARGET])
-    y_train_1 = train_df[_TARGET].values
-    X_valid_1 = valid_df.drop(columns=[_TARGET])
-    y_valid_1 = valid_df[_TARGET].values
-    X_test_1  = test_df.drop(columns=[_TARGET])
-    y_test_1  = test_df[_TARGET].values
+    X_train = train_df.drop(columns=[_TARGET])
+    y_train = train_df[_TARGET].values
+    X_valid = valid_df.drop(columns=[_TARGET])
+    y_valid = valid_df[_TARGET].values
+    X_test  = test_df.drop(columns=[_TARGET])
+    y_test  = test_df[_TARGET].values
 
-    regr_1, X_train_1, y_train_1, X_valid_1, y_valid_1, X_test_1, y_test_1
+    regr, X_train, y_train, X_valid, y_valid, X_test, y_test
+    return X_train, X_valid, regr, y_train, y_valid
+
+
+@app.cell
+def _(
+    RandomizedSearchCV,
+    X_train,
+    X_valid,
+    mean_absolute_error,
+    mean_squared_error,
+    r2_score,
+    regr,
+    y_train,
+    y_valid,
+):
+    # Hyperparameter tuning (quick randomized search)
+    # Build param grid depending on model type
+    base = regr.regressor.named_steps["reg"]
+    if hasattr(base, "get_params") and "num_leaves" in base.get_params():
+        # LightGBM
+        param_distributions = {
+            "regressor__reg__n_estimators": [600, 800, 1000, 1200],
+            "regressor__reg__learning_rate": [0.03, 0.05, 0.08],
+            "regressor__reg__num_leaves": [15, 31, 63], 
+            "regressor__reg__max_depth": [-1, 8, 10, 12], 
+            "regressor__reg__min_child_samples": [10, 20, 50],
+            "regressor__reg__subsample": [0.8,0.9, 1.0], 
+            "regressor__reg__colsample_bytree": [0.8, 0.9, 1.0]
+        }
+    elif hasattr(base, "get_params") and "max_depth" in base.get_params():
+        # XGBoost
+        param_distributions = {
+            "regressor__reg__n_estimators": [500, 800, 1200], 
+            "regressor__reg__learning_rate": [0.03, 0.05, 0.08], 
+            "regressor__reg__max_depth": [6, 8, 10], 
+            "regressor__reg__subsample": [0.8, 0.9, 1.0],
+            "regressor__reg__colsample_bytree": [0.8, 0.9, 1.0], 
+        }
+    else:
+        # Ridge fallback
+        param_distributions = {
+            "reg__alpha": [0.1, 1.0, 10.0, 50.0]
+        }
+
+    # Randomized search over a few configs to keep it fast
+    rs = RandomizedSearchCV(
+        estimator=regr, 
+        param_distributions=param_distributions, 
+        n_iter=12, 
+        scoring="neg_mean_absolute_error", 
+        random_state=42, 
+        n_jobs=-1, 
+        cv=3, 
+        verbose=1
+    )
+    rs.fit(X_train, y_train)
+
+    # Evaluate best on validation
+    best = rs.best_estimator_
+    val_pred = best.predict(X_valid)
+    mae = mean_absolute_error(y_valid, val_pred)
+    rmse = mean_squared_error(y_valid, val_pred, squared=False)
+    r2 = r2_score(y_valid, val_pred)
+
+    {"best_params": rs.best_params_, "val_mae": mae, "val_rmse": rmse, "val_r2": r2}, best 
     return
 
 
