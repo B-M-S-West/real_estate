@@ -397,7 +397,7 @@ def _(
     r2 = r2_score(y_valid, val_pred)
 
     {"best_params": rs.best_params_, "val_mae": mae, "val_rmse": rmse, "val_r2": r2}, best 
-    return
+    return (best,)
 
 
 @app.cell
@@ -408,6 +408,66 @@ def _():
     print("sklearn version:", sklearn.__version__)
     print("mse module:", sm.mean_squared_error.__module__)
     print("mse signature:", inspect.signature(sm.mean_squared_error))
+    return
+
+
+@app.cell
+def _(
+    TARGET,
+    best,
+    date,
+    joblib,
+    mean_absolute_error,
+    np,
+    os,
+    pd,
+    r2_score,
+    root_mean_squared_error,
+    test_df,
+    train_df,
+    valid_df,
+):
+    # Train final model on train+valid and evaluate on test
+    _TARGET = "rentEstimate_currentPrice"
+
+    # Combine train + valid
+    train_valid = pd.concat([train_df, valid_df], axis=0).reset_index(drop=True)
+    X_trv = train_valid.drop(columns=[TARGET])
+    y_trv = train_valid[TARGET].values
+
+    best.fit(X_trv, y_trv)
+
+    # Test evaluation
+    X_test = test_df.drop(columns=[TARGET])
+    y_test = test_df[TARGET].values
+    y_pred = best.predict(X_test)
+
+    mae = mean_absolute_error(y_test, y_pred)
+    rmse = root_mean_squared_error(y_test, y_pred)
+    r2 = r2_score(y_test,y_pred)
+    mape = np.mean(np.abs((y_test - y_pred) / np.maximum(1e-9, y_test))) * 100.0
+
+    # Residual std for a simple interval
+    resid_std = float(np.std(y_test - y_pred))
+
+    # Save artifacts
+    ART_DIR = "artifacts"
+    os.makedirs(ART_DIR, exist_ok=True)
+    model_path = os.path.join(ART_DIR, "rent_model.joblib")
+    meta_path = os.path.join(ART_DIR, "rent_model_meta.joblib")
+
+    joblib.dump(best, model_path)
+    joblib.dump({"resid_std": resid_std, "trained_on": str(date.today())}, meta_path)
+
+    {
+        "test_mae": mae,
+        "test_rmse": rmse,
+        "test_r2": r2, 
+        "test_mape_percent": mape, 
+        "model_path": model_path, 
+        "meta_path": meta_path, 
+        "resid_std": resid_std
+    }
     return
 
 
