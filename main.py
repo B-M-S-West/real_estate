@@ -21,7 +21,7 @@ def _():
     from sklearn.pipeline import Pipeline
     from sklearn.preprocessing import OneHotEncoder
     from sklearn.impute import SimpleImputer
-    from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+    from sklearn.metrics import mean_absolute_error, root_mean_squared_error, r2_score
     from sklearn.compose import TransformedTargetRegressor
     from sklearn.base import BaseEstimator, TransformerMixin
     from sklearn.linear_model import Ridge
@@ -41,8 +41,8 @@ def _():
         TransformedTargetRegressor,
         XGBRegressor,
         mean_absolute_error,
-        mean_squared_error,
         r2_score,
+        root_mean_squared_error,
     )
 
 
@@ -341,9 +341,9 @@ def _(
     X_train,
     X_valid,
     mean_absolute_error,
-    mean_squared_error,
     r2_score,
     regr,
+    root_mean_squared_error,
     y_train,
     y_valid,
 ):
@@ -373,7 +373,7 @@ def _(
     else:
         # Ridge fallback
         param_distributions = {
-            "reg__alpha": [0.1, 1.0, 10.0, 50.0]
+            "regressor__reg__alpha": [0.1, 1.0, 10.0, 50.0]
         }
 
     # Randomized search over a few configs to keep it fast
@@ -393,10 +393,21 @@ def _(
     best = rs.best_estimator_
     val_pred = best.predict(X_valid)
     mae = mean_absolute_error(y_valid, val_pred)
-    rmse = mean_squared_error(y_valid, val_pred, squared=False)
+    rmse = root_mean_squared_error(y_valid, val_pred)
     r2 = r2_score(y_valid, val_pred)
 
     {"best_params": rs.best_params_, "val_mae": mae, "val_rmse": rmse, "val_r2": r2}, best 
+    return
+
+
+@app.cell
+def _():
+    import sys, inspect
+    import sklearn, sklearn.metrics as sm
+    print("Python:", sys.executable)
+    print("sklearn version:", sklearn.__version__)
+    print("mse module:", sm.mean_squared_error.__module__)
+    print("mse signature:", inspect.signature(sm.mean_squared_error))
     return
 
 
