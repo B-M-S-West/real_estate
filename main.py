@@ -13,7 +13,7 @@ def _():
     from datetime import datetime, date
     import os
     import joblib
-    return date, joblib, np, os, pd, pl
+    return date, joblib, mo, np, os, pd, pl
 
 
 @app.cell
@@ -469,6 +469,74 @@ def _(
         "meta_path": meta_path, 
         "resid_std": resid_std
     }
+    return
+
+
+@app.cell
+def _(mo):
+    # Create UI widgets
+    postcode = mo.ui.text(label="Postcode", placeholder="e.g., SW1P 2TA")
+    bathrooms = mo.ui.number(label="Bathrooms", value=1, start=0, step=1)
+    bedrooms = mo.ui.number(label="Bedrooms", value=2, start=0, step=1)
+    floor_area = mo.ui.number(label="Floor area (sq m)", value=60.0, start=0.0, step=1.0)
+    living_rooms = mo.ui.number(label="Living rooms", value=1, start=0, step=1)
+
+    tenure = mo.ui.dropdown(
+        label="Tenure", 
+        options=["Leasehold", "Freehold", "Unknown"], 
+        value="Leasehold"
+    )
+    property_type = mo.ui.dropdown(
+        label="Property type", 
+        options=["Purpose Built Flat", "Flat/Maisonette", "Mid Terrace House", "End Terrace House", "Terrace Property", "Unknown"], 
+        value="Flat/Maisonette"
+    )
+    energy = mo.ui.dropdown(
+        label="Energy rating", 
+        options=["A","B","C","D","E","F","G","Unknown"], 
+        value="D"
+    )
+
+    history_price = mo.ui.number(label="Last history price (£)", value=None, start=0, step=1000)
+    history_date = mo.ui.number(label="Last history date", value=None)
+
+    # Manual lat/lon if postcode not found
+    manual_lat = mo.ui.number(label="Latitude (optional override)", value=None, step=0.0001)
+    manual_lng = mo.ui.number(label="Longitude (optional override", value=None, step=0.0001)
+
+    # Confidence
+    conf_level = mo.ui.dropdown(
+        label="Sale estimate confidence (optional)", 
+        options=["HIGH","MEDIUM","LOW","Unknown"], 
+        value="HIGH"
+    )
+
+    # Predict button
+    predict_btn = mo.ui.button(label="Predict rent")
+
+    widgets = {
+            "postcode": postcode,
+            "bathrooms": bathrooms,
+            "bedrooms": bedrooms,
+            "floor_area": floor_area,
+            "living_rooms": living_rooms,
+            "tenure": tenure,
+            "property_type": property_type,
+            "energy": energy,
+            "history_price": history_price,
+            "history_date": history_date,
+            "manual_lat": manual_lat,
+            "manual_lng": manual_lng,
+            "conf_level": conf_level,
+            "predict_btn": predict_btn
+        }
+
+    widgets
+    return
+
+
+@app.cell
+def _():
     return
 
 
