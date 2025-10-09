@@ -11,7 +11,9 @@ def _():
     import pandas as pd
     import numpy as np
     from datetime import datetime, date
-    return date, np, pd, pl
+    import os
+    import joblib
+    return date, joblib, np, os, pd, pl
 
 
 @app.cell
@@ -413,7 +415,6 @@ def _():
 
 @app.cell
 def _(
-    TARGET,
     best,
     date,
     joblib,
@@ -432,23 +433,23 @@ def _(
 
     # Combine train + valid
     train_valid = pd.concat([train_df, valid_df], axis=0).reset_index(drop=True)
-    X_trv = train_valid.drop(columns=[TARGET])
-    y_trv = train_valid[TARGET].values
+    X_trv = train_valid.drop(columns=[_TARGET])
+    y_trv = train_valid[_TARGET].values
 
     best.fit(X_trv, y_trv)
 
     # Test evaluation
-    X_test = test_df.drop(columns=[TARGET])
-    y_test = test_df[TARGET].values
-    y_pred = best.predict(X_test)
+    X_test_final = test_df.drop(columns=[_TARGET])
+    y_test_final = test_df[_TARGET].values
+    y_pred_final = best.predict(X_test_final)
 
-    mae = mean_absolute_error(y_test, y_pred)
-    rmse = root_mean_squared_error(y_test, y_pred)
-    r2 = r2_score(y_test,y_pred)
-    mape = np.mean(np.abs((y_test - y_pred) / np.maximum(1e-9, y_test))) * 100.0
+    mae_final = mean_absolute_error(y_test_final, y_pred_final)
+    rmse_final = root_mean_squared_error(y_test_final, y_pred_final)
+    r2_final = r2_score(y_test_final, y_pred_final)
+    mape_final = np.mean(np.abs((y_test_final - y_pred_final) / np.maximum(1e-9, y_test_final))) * 100.0
 
     # Residual std for a simple interval
-    resid_std = float(np.std(y_test - y_pred))
+    resid_std = float(np.std(y_test_final - y_pred_final))
 
     # Save artifacts
     ART_DIR = "artifacts"
@@ -460,10 +461,10 @@ def _(
     joblib.dump({"resid_std": resid_std, "trained_on": str(date.today())}, meta_path)
 
     {
-        "test_mae": mae,
-        "test_rmse": rmse,
-        "test_r2": r2, 
-        "test_mape_percent": mape, 
+        "test_mae": mae_final,
+        "test_rmse": rmse_final,
+        "test_r2": r2_final, 
+        "test_mape_percent": mape_final, 
         "model_path": model_path, 
         "meta_path": meta_path, 
         "resid_std": resid_std
