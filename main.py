@@ -196,7 +196,7 @@ def _(date, pl, real_estate_data_2):
     }
 
     real_estate_data_3.head(3), len(postcode_lookup), list(real_estate_data_3.columns)
-    return (real_estate_data_3,)
+    return postcode_lookup, real_estate_data_3
 
 
 @app.cell
@@ -547,6 +547,69 @@ def _(mo, widgets):
         mo.hstack([widgets["manual_lat"], widgets["manual_lng"]]), 
         widgets["predict_btn"]
     ])
+    return
+
+
+@app.cell
+def _(date, pd, postcode_lookup, widgets):
+    # Helper: construct a single-row pandas DataFrame with required features
+    def build_single_row():
+        pc = (widgets["postcode"].value or "").strip().upper()
+        info = postcode_lookup.get(pc, None)
+
+        lat = widgets["manual_lat"].value if widgets["manual_lat"].value is not None else (info["lat"] if info else None)
+        lng = widgets["manual_lng"].value if widgets["manual_lng"].value is not None else (info["lng"] if info else None)
+        outcode = info["outcode"] if info else None 
+        outcode_prefix = info["outcode_prefic"] if info else None 
+
+        # months since last sale from history_date widget (user-provided)
+        hdate = widgets["history_date"].value
+        if hdate:
+            try:
+                dt = pd.to_datetime(hdate).date()
+                months_since_last_sale = (date.today() - dt).days / 30.4375
+
+            except Exception:
+                months_since_last_sale = None
+        else:
+            months_since_last_sale = None
+
+        # sale_to_hist_ratio needs a current sale estimate; not available in UI.
+        # We'll approximate ratio using history_price if provided:
+        history_price = widgets["history_price"].value
+        sale_to_hist_ratio = None  # leave as None; pipeline will impute
+
+        # Normalise string categories
+        energy = widgets["energy"].value
+        energy = None if (energy in [None, "", "Unknown"]) else energy
+
+        tenure = widgets["tenure"].value
+        tenure = None if tenure in [None, "", "Unknown"] else tenure
+
+        ptype = widgets["property_type"].value
+        ptype = None if ptype in [None, "", "Unknown"] else ptype
+
+        conf = widgets["conf_level"].value
+        conf = None if conf in [None, "", "Unknown"] else conf
+
+        row = {
+            "bathrooms": widgets["bathrooms"].value,
+            "bedrooms": widgets["bedrooms"].value,
+            "floorAreaSqM": widgets["floor_area"].value,
+            "livingRooms": widgets["living_rooms"].value,
+            "latitude": lat,
+            "longitude": lng,
+            "months_since_last_sale": months_since_last_sale,
+            "sale_to_hist_ratio": sale_to_hist_ratio,
+            "tenure": tenure,
+            "propertyType": ptype,
+            "currentEnergyRating": energy,
+            "outcode": outcode,
+            "outcode_prefix": outcode_prefix,
+            "saleEstimate_confidenceLevel": conf
+        }
+        # Some features might not exist in trained pipeline; keep them, pipeline will drop extras or expect these names.
+        return pd.DataFrame([row])
     return
 
 
