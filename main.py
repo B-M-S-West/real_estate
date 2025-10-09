@@ -532,11 +532,21 @@ def _(mo):
         }
 
     widgets
-    return
+    return (widgets,)
 
 
 @app.cell
-def _():
+def _(mo, widgets):
+    mo.md("### Enter details and click Predict")
+    mo.vstack([
+        mo.hstack([widgets["postcode"], widgets["conf_level"]]), 
+        mo.hstack([widgets["bathrooms"], widgets["bedrooms"], widgets["living_rooms"]]), 
+        widgets["floor_area"], 
+        mo.hstack([widgets["tenure"], widgets["property_type"], widgets["energy"]]), 
+        mo.hstack([widgets["history_price"], widgets["history_date"]]), 
+        mo.hstack([widgets["manual_lat"], widgets["manual_lng"]]), 
+        widgets["predict_btn"]
+    ])
     return
 
 
