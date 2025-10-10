@@ -498,7 +498,7 @@ def _(mo):
     )
 
     history_price = mo.ui.number(label="Last history price (£)", value=None, start=0, step=1000)
-    history_date = mo.ui.number(label="Last history date", value=None)
+    history_date = mo.ui.date(label="Last history date", value="2022-01-01")
 
     # Manual lat/lon if postcode not found
     manual_lat = mo.ui.number(label="Latitude (optional override)", value=None, step=0.0001)
@@ -561,7 +561,7 @@ def _(date, pd, postcode_lookup, widgets):
         lat = widgets["manual_lat"].value if widgets["manual_lat"].value is not None else (info["lat"] if info else None)
         lng = widgets["manual_lng"].value if widgets["manual_lng"].value is not None else (info["lng"] if info else None)
         outcode = info["outcode"] if info else None 
-        outcode_prefix = info["outcode_prefic"] if info else None 
+        outcode_prefix = info["outcode_prefix"] if info else None 
 
         # months since last sale from history_date widget (user-provided)
         hdate = widgets["history_date"].value
