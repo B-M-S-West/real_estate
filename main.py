@@ -610,6 +610,36 @@ def _(date, pd, postcode_lookup, widgets):
         }
         # Some features might not exist in trained pipeline; keep them, pipeline will drop extras or expect these names.
         return pd.DataFrame([row])
+    return (build_single_row,)
+
+
+@app.cell
+def _(build_single_row, joblib, mo, widgets):
+    # Perform prediction when button clicked
+    if widgets["predict_btn"].value == 0:
+        mo.md("Prediction will appear here after you click Predict.")
+    else:
+        try:
+            # Load artifacts
+            _model = joblib.load("artificats/rent_model.joblib")
+            meta = joblib.load("artifacts/rent_model_meta.joblib")
+
+            X_new = build_single_row()
+
+            # Predict
+            y_hat = _model.predict(X_new)[0]
+            _resid_std = meta.get("resid_std", 0.0)
+
+            # Naive 68% interval
+            low = max(0.0, y_hat - _resid_std)
+            high = y_hat + _resid_std
+
+            mo.md(
+                f"#### Predicted monthly rent: £{y_hat:,.0f}\n"
+                f"Approx. range(±1σ): £{low:,.0f} - £{high:,.0f}"
+            )
+        except Exception as e:
+            mo.md(f"Prediction error: {e}")
     return
 
 
