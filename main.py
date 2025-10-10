@@ -512,7 +512,7 @@ def _(mo):
     )
 
     # Predict button
-    predict_btn = mo.ui.button(label="Predict rent")
+    predict_btn = mo.ui.run_button(label="Predict rent")
 
     widgets = {
             "postcode": postcode,
@@ -538,7 +538,7 @@ def _(mo):
 @app.cell
 def _(mo, widgets):
     mo.md("### Enter details and click Predict")
-    mo.vstack([
+    ui = mo.vstack([
         mo.hstack([widgets["postcode"], widgets["conf_level"]]), 
         mo.hstack([widgets["bathrooms"], widgets["bedrooms"], widgets["living_rooms"]]), 
         widgets["floor_area"], 
@@ -547,6 +547,7 @@ def _(mo, widgets):
         mo.hstack([widgets["manual_lat"], widgets["manual_lng"]]), 
         widgets["predict_btn"]
     ])
+    ui
     return
 
 
@@ -614,32 +615,56 @@ def _(date, pd, postcode_lookup, widgets):
 
 
 @app.cell
-def _(build_single_row, joblib, mo, widgets):
-    # Perform prediction when button clicked
-    if widgets["predict_btn"].value == 0:
-        mo.md("Prediction will appear here after you click Predict.")
-    else:
-        try:
+def _(build_single_row, joblib, mo, os, widgets):
+    # Always produce a component to render
+    try:
+        clicks = widgets["predict_btn"].value or 0
+        if clicks == 0:
+            out = mo.md("Prediction will appear here after you click Predict.")
+        else:
             # Load artifacts
-            _model = joblib.load("artificats/rent_model.joblib")
-            meta = joblib.load("artifacts/rent_model_meta.joblib")
+            _model_path = "artifacts/rent_model.joblib"
+            _meta_path = "artifacts/rent_model_meta.joblib"
 
-            X_new = build_single_row()
+            if not os.path.exists(_model_path):
+                out = mo.md(f"Model file not found at {_model_path}. Train the model first.")
+            else:
+                _model = joblib.load(_model_path)
+                meta = joblib.load(_meta_path) if os.path.exists(_meta_path) else {"resid_std": 0.0}
 
-            # Predict
-            y_hat = _model.predict(X_new)[0]
-            _resid_std = meta.get("resid_std", 0.0)
+                X_new = build_single_row()
 
-            # Naive 68% interval
-            low = max(0.0, y_hat - _resid_std)
-            high = y_hat + _resid_std
+                # Quick check: show the row we will predict on
+                # Comment this out later if too verbose
+                preview = mo.md("Input row preview:\n\n" + X_new.to_markdown())
 
-            mo.md(
-                f"#### Predicted monthly rent: £{y_hat:,.0f}\n"
-                f"Approx. range(±1σ): £{low:,.0f} - £{high:,.0f}"
-            )
-        except Exception as e:
-            mo.md(f"Prediction error: {e}")
+                # Predict
+                y_hat = float(_model.predict(X_new)[0])
+                _resid_std = float(meta.get("resid_std", 0.0))
+
+                low = max(0.0, y_hat - _resid_std)
+                high = y_hat + _resid_std
+
+                out = mo.vstack([
+                    mo.md(f"Button clicks: {clicks}"),
+                    preview,
+                    mo.md(
+                        f"#### Predicted monthly rent: £{y_hat:,.0f}\n"
+                        f"Approx. range (±1σ): £{low:,.0f} – £{high:,.0f}"
+                    )
+                ])
+    except Exception as e:
+        out = mo.md(f"Prediction error: `{type(e).__name__}: {e}`")
+
+    out
+    return (clicks,)
+
+
+@app.cell
+def _(clicks, mo, os):
+    exists_model = os.path.exists("artifacts/rent_model.joblib")
+    exists_meta = os.path.exists("artifacts/rent_model_meta.joblib")
+    mo.md(f"Debug — clicks={clicks}, model={exists_model}, meta={exists_meta}")
     return
 
 
